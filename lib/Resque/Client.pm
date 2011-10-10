@@ -20,24 +20,19 @@ sub connection {
 sub push {
     my $self  = shift;
     my $queue = shift;
-    my $task  = shift;
+    my $class = shift;
+    my $args_ref = shift || [];
+
+    my $data = JSON::encode_json({
+        class => $class,
+        args  => $args_ref,
+    });
+
 
     my $connection = $self->connection();
-
-    my $key = $connection->key( $queue );
     my $redis = $connection->redis();
-    $redis->sadd( queues => $queue );
-    return $redis->rpush( $key => JSON::encode_json($task) );
-}
-
-sub pop {
-    my $self = shift;
-    my $queue = shift;
-
-    my $connection = $self->connection();
-    my $key = $connection->key( $queue );
-    my $obj = $connection->redis->lpop($key);
-    return JSON::decode_json( $obj );
+    $redis->sadd( $connection->key('queues') => $queue );
+    return $redis->rpush( $connection->key('queue', $queue) => $data );
 }
 
 1;

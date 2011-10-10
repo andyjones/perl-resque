@@ -17,14 +17,14 @@ sub new {
     return bless { %$args_ref }, $class;
 }
 
-sub client {
+sub new_client {
     my $self = ref($_[0]) ? shift : shift->new(@_);
 
     require Resque::Client;
     return Resque::Client->new({ connection => $self });
 }
 
-sub worker {
+sub new_worker {
     my $self = ref($_[0]) ? shift : shift->new(@_);
 
     require Resque::Worker;
@@ -33,9 +33,7 @@ sub worker {
 
 sub key {
     my $self = shift;
-    my $queue = shift;
-
-    return join(':', $self->namespace(), 'queue', $queue);
+    return join(':', $self->namespace(), @_);
 }
 
 # accessors/setters
