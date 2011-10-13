@@ -53,12 +53,7 @@ sub redis {
 
 sub connect_to_redis {
     my $self = shift;
-    warn "Connecting to redis\n";
-    return Redis->new( server => $self->server(), debug => 1 );
-}
-
-sub DESTROY {
-    warn "Crap, what happened, we are dead";
+    return Redis->new( server => $self->server(), debug => 0 );
 }
 
 1;
