@@ -11,3 +11,4 @@ use Resque;
 my $client = Resque->new_client();
 
 $client->push('high', 'TestClass', ['add', 'date']);
+$client->push('high', 'FakeClass', ['add', 'date']);

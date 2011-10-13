@@ -35,6 +35,19 @@ sub payload_args {
     return @{ $_[0]->payload()->{args} || [] };
 }
 
+sub perform {
+    my $self = shift;
+    my $class = $self->payload_class();
+
+    local $@;
+    my $loaded_class = eval "use $class; 1";
+    if ( $loaded_class ) {
+        return $class->perform( $self->payload_args() );
+    }
+
+    return die "Unable to load $class: $@";
+}
+
 sub to_string {
     my $self = shift;
     return sprintf "(Job{%s} | %s | [%s]",

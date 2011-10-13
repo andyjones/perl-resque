@@ -238,6 +238,20 @@ sub process_job {
 
     $self->log_debug("Processing job: [%s]", $job);
     # fork
+
+    my $stack;
+    require Carp;
+    local $SIG{__DIE__} = sub { $stack = Carp::longmess(@_); };
+    eval {
+        $job->perform();
+    };
+
+    if ( $stack ) {
+        $self->log_info("Failed to process job [%s]: [%s]", $job, $stack);
+    }
+    else {
+        $self->log_info("Processed job: [%s]", $job);
+    }
 }
 
 # methods to notify redis of our presence
