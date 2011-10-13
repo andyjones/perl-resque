@@ -80,7 +80,30 @@ sub work {
 
 sub startup {
     my $self = shift;
+
+    $self->register_signal_handlers();
+    $self->prune_dead_workers();
     $self->register_worker();
+}
+
+# Registers the various signal handlers a worker responds to.
+#
+# TERM: Shutdown immediately, stop processing jobs.
+#  INT: Shutdown immediately, stop processing jobs.
+# QUIT: Shutdown after the current job has finished processing.
+# USR1: Kill the forked child immediately, continue processing jobs.
+# USR2: Don't process any new jobs
+# CONT: Start processing jobs again after a USR2
+#
+# Perl gotcha: you must unregister the signal handlers
+# or the worker will not be destroyed correctly
+# TODO: explain this quirk better :)
+sub register_signal_handlers {
+    my $self = shift;
+}
+
+sub prune_dead_workers {
+    my $self = shift;
 }
 
 sub paused {
@@ -88,24 +111,66 @@ sub paused {
 }
 
 sub reserve {
+    my $self = shift;
+
+    my @queues = $self->watched_queues()
+        or return;
+
+    my $redis = $self->redis();
+    foreach my $queue ( @queues ) {
+        if ( my $job = $self->reserve_job( $queue ) ) {
+            $self->log_debug("Found job on %s", $queue);
+            return $job;
+        }
+    }
+    return;
 }
 
-sub queues {
-    return qw(high medium low);
-}
-
-sub process_job {
-    # fork
-}
-
-sub pop {
+sub reserve_job {
     my $self = shift;
     my $queue = shift;
 
-    my $connection = $self->connection();
-    my $key = $connection->key( $queue );
-    my $obj = $connection->redis->lpop($key);
-    return JSON::decode_json( $obj );
+    my $json_payload = $self->redis->lpop( $self->key('queue', $queue) );
+
+}
+
+sub queues {
+    my $self = shift;
+    if ( @_ ) {
+        $self->{queues} = [ @_ ];
+    }
+    my $queues_ref = $self->{queues} ||= [ '*' ];
+    if ( !@$queues_ref ) {
+        return '*';
+    }
+
+    return @$queues_ref;
+}
+
+sub watched_queues {
+    my $self = shift;
+    my @queues = $self->queues();
+    if ( !@queues || $queues[0] eq '*' ) {
+        return $self->all_queues();
+    }
+
+    return @queues;
+}
+
+sub all_queues {
+    my $self = shift;
+
+    return $self->redis->smembers(
+        $self->key( 'queues' ),
+    );
+}
+
+sub process_job {
+    my $self = shift;
+    my $job  = shift;
+
+    $self->log_debug("Processing job: [%s]", $job);
+    # fork
 }
 
 # methods to notify redis of our presence
@@ -171,3 +236,16 @@ sub procline {
 }
 
 1;
+
+__END__
+
+=head1 Resque::Worker
+
+perl clone of the awesome Resque library for Ruby
+
+=head1 TODO
+
+ * fork before taking a job
+ * undef the signal handlers on END so our objects are destroyed in the correct order
+ * clear dead workers when we start
+ * put the job back in the queue if it fails
