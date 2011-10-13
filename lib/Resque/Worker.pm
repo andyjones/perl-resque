@@ -7,6 +7,8 @@ use Time::HiRes;
 use DateTime;
 use Sys::Hostname;
 
+use overload qw{""} => \&name;
+
 my $DEFAULT_INTERVAL = 5.0;
 
 sub new {
