@@ -6,6 +6,7 @@ use JSON;
 use Time::HiRes;
 use DateTime;
 use Sys::Hostname;
+use Resque::Job;
 
 use overload qw{""} => \&name;
 
@@ -188,8 +189,16 @@ sub reserve_job {
     my $self = shift;
     my $queue = shift;
 
-    my $json_payload = $self->redis->lpop( $self->key('queue', $queue) );
+    my $json_payload = $self->redis->lpop( $self->key('queue', $queue) )
+        or return;
 
+    my $payload_ref = JSON::decode_json( $json_payload );
+
+    return Resque::Job->new({
+        worker  => $self,
+        queue   => $queue,
+        payload => $payload_ref,
+    });
 }
 
 sub queues {
