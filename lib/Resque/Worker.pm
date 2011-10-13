@@ -272,7 +272,7 @@ sub log_info {
 sub log_debug {
     my $self = shift;
     my $mask = shift;
-    my $msg  = @_ ? sprintf($mask, @_) : shift;
+    my $msg  = @_ ? sprintf($mask, @_) : $mask;
     $msg =~ s/\n?$/\n/; # make sure it ends with a new line
 
     my $now = $self->now();
