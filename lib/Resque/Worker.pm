@@ -15,6 +15,8 @@ sub new {
 
     return bless {
         interval => $DEFAULT_INTERVAL,
+        parent_pid => $$,
+        child_pid  => 0,
         %$args_ref
     }, $class;
 }
@@ -42,7 +44,18 @@ sub interval {
     return $_[0]->{interval} = $_[1];
 }
 
+sub child_pid {
+    return $_[0]->{child_pid} if @_ == 1;
+    return $_[0]->{child_pid} = $_[1];
+}
 
+sub is_child {
+    return $_[0]->{child_pid} == $$;
+}
+
+sub is_parent {
+    return $_[0]->{parent_pid} == $$;
+}
 
 # main work loop
 sub work {
@@ -100,14 +113,57 @@ sub startup {
 # TODO: explain this quirk better :)
 sub register_signal_handlers {
     my $self = shift;
+
+    $SIG{INT} = $SIG{TERM} = sub { $self->shutdown_now(); };
+    $SIG{QUIT} = sub { $self->shutdown(); };
+    $SIG{USR1} = sub { $self->kill_child(); };
+    $SIG{USR2} = sub { $self->pause_processing(); };
+    $SIG{CONT} = sub { $self->resume_processing(); };
+
+    $self->log_debug('Registered signals');
 }
+
+# typically used as a class method
+sub unregister_signal_handlers {
+    delete @SIG{ qw/INT TERM QUIT USR1 USR2 CONT/ };
+}
+
+sub shutdown {
+    my $self = shift;
+    $self->log_info('Exiting...');
+    $self->{shutdown} = 1;
+}
+
+sub shutdown_now {
+    my $self = shift;
+    $self->shutdown();
+    $self->kill_child();
+}
+
+sub kill_child {
+    # TODO
+}
+
+sub pause_processing {
+    my $self = shift;
+    $self->log_info('USR2 received; pausing job processing');
+    $self->{paused} = 1;
+}
+
+sub resume_processing {
+    my $self = shift;
+    $self->log_info('CONT received; resuming job processing');
+    $self->{paused} = 0;
+}
+
+
 
 sub prune_dead_workers {
     my $self = shift;
 }
 
 sub paused {
-    return 0;
+    return $_[0]->{paused};
 }
 
 sub reserve {
@@ -203,7 +259,7 @@ sub unregister_worker {
 
 sub DESTROY {
     my $self = shift;
-    if ( $self->{registered} ) {
+    if ( $self->is_parent() && $self->{registered} ) {
         $self->unregister_worker();
     }
 }
@@ -233,6 +289,10 @@ sub procline {
     my $mask = shift;
     my $msg  = @_ ? sprintf($mask, @_) : shift;
     $0 = 'resque: ' . $msg;
+}
+
+END {
+    __PACKAGE__->unregister_signal_handlers();
 }
 
 1;
