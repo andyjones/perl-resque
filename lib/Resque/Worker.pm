@@ -287,7 +287,7 @@ sub now {
 sub procline {
     my $self = shift;
     my $mask = shift;
-    my $msg  = @_ ? sprintf($mask, @_) : shift;
+    my $msg  = @_ ? sprintf($mask, @_) : $mask;
     $0 = 'resque: ' . $msg;
 }
 
