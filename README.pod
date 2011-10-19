@@ -20,6 +20,21 @@ Add some jobs
 
   use Resque;
   my $client = Resque->new_client();
-  $client->push('Queuename', 'Class', ['arg1', 'arg2', 'etc']);
+  $client->push('Queuename', 'MyClass', ['arg1', 'arg2', 'etc']);
  
+Perform asynchronous tasks
+
+  package MyClass;
   
+  sub perform {
+    my $class = shift;
+    my @args = @_;
+    
+    # do something
+    
+  }
+
+=head3 Monitoring
+
+Resque ( Ruby ) includes a nice front end which works just as well with Perl-Resque
+see L<https://github.com/defunkt/resque> for more information
