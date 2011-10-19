@@ -13,8 +13,20 @@ our $DEFAULT_NAMESPACE = 'resque';
 sub new {
     my $class = shift;
     my $args_ref = shift || {};
+    
+    $args_ref->{'workers'} = {};
 
     return bless { %$args_ref }, $class;
+}
+
+sub workers {
+    return $_[0]->{'workers'} if @_ == 1;
+    return $_[0]->{'workers'}->{$_[1]} = 1;
+}
+
+sub remove_worker {
+    return 0 if @_ == 1;
+    return delete($_[0]->{'workers'}->{$_[1]});
 }
 
 sub new_client {
