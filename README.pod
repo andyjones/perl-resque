@@ -1,0 +1,3 @@
+=head1 Perl-Resque
+
+A Perl port of Resque ( https://github.com/defunkt/resque )
