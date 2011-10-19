@@ -12,13 +12,13 @@ Redis ( L<http://redis.io> )
 
 Start some workers
 
-  use Resque
+  use Resque;
   my $worker = Resque->new_worker( { queues => ['are','optional'] } );
   $worker->work();
 
 Add some jobs
 
-  use Resque
+  use Resque;
   my $client = Resque->new_client();
   $client->push('Queuename', 'Class', ['arg1', 'arg2', 'etc']);
  
