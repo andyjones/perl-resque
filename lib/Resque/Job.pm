@@ -3,6 +3,7 @@ package Resque::Job;
 use strict;
 
 use overload q{""} => \&to_string;
+use Resque::Failure;
 
 sub new {
     my $class = shift;
@@ -46,6 +47,14 @@ sub perform {
     }
 
     return die "Unable to load $class: $@";
+}
+
+sub fail {
+    my $self = shift;
+    my $args_ref = shift; 
+    $args_ref->{'job'} = $self;
+    my $fail = Resque::Failure->new($args_ref);
+    return $fail->fail();
 }
 
 sub to_string {

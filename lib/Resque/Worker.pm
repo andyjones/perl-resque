@@ -7,6 +7,7 @@ use Time::HiRes;
 use DateTime;
 use Sys::Hostname;
 use Resque::Job;
+use Resque::Failure;
 
 use overload qw{""} => \&name;
 
@@ -41,6 +42,9 @@ sub connection {
 
 sub key   { return shift->{connection}->key(@_); }
 sub redis { return shift->{connection}->redis(@_); }
+
+sub known_workers { return shift->{connection}->workers(@_); } # add $self->name or return hash_ref of all
+sub remove_known_worker { return shift->{connection}->remove_worker(@_); }
 
 sub interval {
     return $_[0]->{interval} if @_ == 1;
@@ -78,6 +82,7 @@ sub work {
             $self->procline('Paused');
         }
         elsif ( my $job = $self->reserve() ) {
+            $self->working_on( $job );
             $self->process_job( $job );
         }
         else {
@@ -144,8 +149,22 @@ sub shutdown_now {
 }
 
 sub kill_child {
-    # TODO
+    my $self = shift;
+    if ( $self->is_parent() && $self->child_pid() ) {
+        $self->log_info('Killing Child %s - my pid %s',$self->child_pid(),$$);
+        $self->dirty_fail();
+        kill( 'KILL' => $self->child_pid() );
+    }
 }
+
+sub dirty_fail {
+    my $self = shift;
+    if ( $self->state() ){
+        $self->log_info("Advert remains unfinished");
+        my $fail = Resque::Failure->dirty_fail($self);
+        $fail->fail();
+    }
+} 
 
 sub pause_processing {
     my $self = shift;
@@ -159,10 +178,39 @@ sub resume_processing {
     $self->{paused} = 0;
 }
 
-
-
 sub prune_dead_workers {
     my $self = shift;
+
+    my $known_workers = $self->known_workers();
+    my @db_workers = $self->redis->smembers( $self->key('workers') );
+
+    # we should probably check that the zombie worker wasnt working on something at this point... if it was then requeue it
+
+    foreach my $dbwork ( @db_workers ) {
+        if ( !$known_workers->{$dbwork} ) {
+            $self->prune_worker($dbwork);
+        }
+    }
+
+}
+
+sub prune_worker {
+    my $self = shift;
+    my $name = shift;
+
+    my $redis = $self->redis();
+
+    $redis->srem($self->key('workers') => $name);
+
+    # --- if this exists on a restart should we be worried?
+    $redis->del($self->key('worker', $name));
+    # ---
+
+    $redis->del($self->key('worker', $name, 'started'));
+    $redis->del($self->key('stat','processed',$name));
+    $redis->del($self->key('stat','failed',$name));
+
+    $self->remove_known_worker($name);
 }
 
 sub paused {
@@ -240,18 +288,42 @@ sub process_job {
     # fork
 
     my $stack;
-    require Carp;
-    local $SIG{__DIE__} = sub { $stack = Carp::longmess(@_); };
-    eval {
-        $job->perform();
-    };
+    require Devel::StackTrace;
+    local $SIG{__DIE__} = sub { $stack = Devel::StackTrace->new( ignore_package => [__PACKAGE__], message => $_[0] ); };
 
-    if ( $stack ) {
-        $self->log_info("Failed to process job [%s]: [%s]", $job, $stack);
+    my $pid = fork();
+    if ( !defined $pid ) {
+        #mmmh fork no go
+    } elsif ( $pid ) {
+        $self->log_debug("%s Forked to %s",$self->name(),$pid);
+        $self->child_pid($pid);
+        waitpid($pid,0);
+    } else {
+        #im the child
+        $self->child_pid($$);
+        eval {
+            $job->perform();
+        };
+       
+        if ( $stack ) {
+            $job->fail( { stack =>$stack, worker => $self } );
+            $self->stat_fail();
+        }
+        else {
+            $self->log_info("Processed job: [%s]", $job);
+            $self->stat_complete();
+        }
+
+        exit(0);
     }
-    else {
-        $self->log_info("Processed job: [%s]", $job);
-    }
+
+    $self->done_working();
+}
+
+# currently working 1 or not 0
+sub state {
+    my $self = shift;
+    return $self->redis()->exists($self->key('worker',$self->name()));
 }
 
 # methods to notify redis of our presence
@@ -261,6 +333,8 @@ sub register_worker {
     my $redis = $self->redis();
     my $name = $self->name();
     $self->{registered} = 1;
+    $self->known_workers($name);
+
     $redis->sadd($self->key('workers') => $name);
     $redis->set($self->key('worker', $name, 'started') => $self->now() ); 
 }
@@ -268,23 +342,36 @@ sub register_worker {
 sub unregister_worker {
     my $self = shift;
 
-    # TODO: log unfinished jobs
-
-    my $redis = $self->redis();
     my $name  = $self->name();
-
-    $redis->srem($self->key('workers') => $name);
-    $redis->del($self->key('worker', $name));
-    $redis->del($self->key('worker', $name, 'started'));
-
-    # clear processed, $name stats
-    # clear failed, $name stats
+    $self->prune_worker($name);
     $self->{registered} = 0;
+}
+
+sub working_on {
+    my $self = shift;
+    my $job = shift;
+
+    $job->worker( $self );
+    my $data = JSON::encode_json({
+        queue => $job->queue(),
+        run_at => $self->now(),
+        payload => $job->payload()
+    });
+    
+    return $self->redis()->set($self->key('worker',$self->name()) => $data);
+
+}
+
+sub done_working {
+    my $self = shift;
+    $self->child_pid(undef);
+    return $self->redis()->del($self->key('worker',$self->name()));
 }
 
 sub DESTROY {
     my $self = shift;
     if ( $self->is_parent() && $self->{registered} ) {
+        $self->log_info("running destroy");
         $self->unregister_worker();
     }
 }
@@ -314,6 +401,26 @@ sub procline {
     my $mask = shift;
     my $msg  = @_ ? sprintf($mask, @_) : $mask;
     $0 = 'resque: ' . $msg;
+}
+
+sub stat_complete {
+
+    my $self = shift;
+    my $count = shift || 1;
+
+    $self->redis()->incrby($self->key('stat','processed',$self->name()),$count);
+    $self->redis()->incrby($self->key('stat','processed'),$count);
+
+}
+
+sub stat_fail {
+
+    my $self = shift;
+    my $count = shift || 1;
+
+    $self->redis()->incrby($self->key('stat','failed',$self->name()),$count);
+    $self->redis()->incrby($self->key('stat','failed'),$count);
+
 }
 
 END {
