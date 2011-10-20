@@ -1,3 +1,40 @@
 =head1 Perl-Resque
 
-A Perl port of Resque ( https://github.com/defunkt/resque )
+A Perl port of Resque ( L<https://github.com/defunkt/resque> )
+
+
+=head3 Dependencies
+
+Redis ( L<http://redis.io> )
+
+
+=head3 Usage
+
+Start some workers
+
+  use Resque;
+  my $worker = Resque->new_worker( { queues => ['are','optional'] } );
+  $worker->work();
+
+Add some jobs
+
+  use Resque;
+  my $client = Resque->new_client();
+  $client->push('Queuename', 'MyClass', ['arg1', 'arg2', 'etc']);
+ 
+Perform asynchronous tasks
+
+  package MyClass;
+  
+  sub perform {
+    my $class = shift;
+    my @args = @_;
+    
+    # do something
+    
+  }
+
+=head3 Monitoring
+
+Resque ( Ruby ) includes a nice front end which works just as well with Perl-Resque
+see L<https://github.com/defunkt/resque> for more information
