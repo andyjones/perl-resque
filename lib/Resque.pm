@@ -5,6 +5,8 @@ use strict;
 # Perl port of the coffeescript port of resque ;)
 # https://github.com/technoweenie/coffee-resque/blob/master/src/index.coffee
 
+our $VERSION = 0.02;
+
 use Redis;
 
 our $DEFAULT_SERVER = 'localhost:6379';

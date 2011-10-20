@@ -11,7 +11,7 @@ use Devel::StackTrace;
 
 use base 'Class::Accessor::Fast';
 
-__PACKAGE__->mk_accessors( qw/job stack worker/ );
+__PACKAGE__->mk_accessors( qw/job stack worker error/ );
 
 sub queue {
     return $_[0]->{job}->{queue};
@@ -34,7 +34,7 @@ sub json {
         'failed_at' => $self->now_time(),
         'payload'   => $self->payload(),
         'exception' => $stack->as_string(),
-        'error'     => $stack->frame(0)->as_string(),
+        'error'     => $self->error() || $stack->frame(0)->as_string(),
         'backtrace' => [$self->backtrace($stack)],
         'worker'    => $self->worker_name(),
         'queue'     => $self->queue(),

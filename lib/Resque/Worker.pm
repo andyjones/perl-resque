@@ -301,15 +301,16 @@ sub process_job {
     } else {
         #im the child
         $self->child_pid($$);
-        eval {
+        
+        my $ok = eval {
             $job->perform();
+            return 1;
         };
        
-        if ( $stack ) {
-            $job->fail( { stack =>$stack, worker => $self } );
+        if ( !$ok ) {
+            $job->fail( { error => $@, stack =>$stack, worker => $self } );
             $self->stat_fail();
-        }
-        else {
+        } else {
             $self->log_info("Processed job: [%s]", $job);
             $self->stat_complete();
         }
