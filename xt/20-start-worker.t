@@ -2,12 +2,24 @@
 
 use strict;
 
-use Test::More;
+use Test::More tests => 1;
 
 use lib qw(../lib);
 
 use Resque;
 
-my $worker = Resque->new_worker();
+! caller && &main;
 
-$worker->work();
+sub main {
+    my $worker = Resque->new_worker;
+    $worker->work(\&test);
+}
+
+sub test {
+    my $switch = shift;
+
+    if ($switch eq "job_done") {
+        ok(1);
+        return "last";
+    }
+}

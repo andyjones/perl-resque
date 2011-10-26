@@ -31,7 +31,7 @@ sub push {
 
     my $connection = $self->connection();
     my $redis = $connection->redis();
-    $redis->sadd( $connection->key('queues') => $queue );
+    $redis->sadd( $connection->key('queue') => $queue );
     return $redis->rpush( $connection->key('queue', $queue) => $data );
 }
 
