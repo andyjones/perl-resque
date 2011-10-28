@@ -197,6 +197,8 @@ sub prune_dead_workers {
     # we should probably check that the zombie worker wasnt working on something at this point... if it was then requeue it
 
     my $this_hostname = Sys::Hostname::hostname();
+
+    WORKER:
     foreach my $dbworker ( @db_workers ) {
         my ($hostname, $pid, $queues) = split /:/, $dbworker;
         if ( $hostname ne $this_hostname ) {
