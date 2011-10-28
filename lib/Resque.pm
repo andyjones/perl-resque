@@ -5,7 +5,7 @@ use strict;
 # Perl port of the coffeescript port of resque ;)
 # https://github.com/technoweenie/coffee-resque/blob/master/src/index.coffee
 
-our $VERSION = 0.02;
+our $VERSION = 0.03;
 
 use Redis;
 

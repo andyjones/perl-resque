@@ -43,8 +43,8 @@ sub connection {
 sub key   { return shift->{connection}->key(@_); }
 sub redis { return shift->{connection}->redis(@_); }
 
-sub known_workers { return shift->{connection}->workers(@_); } # add $self->name or return hash_ref of all
-sub remove_known_worker { return shift->{connection}->remove_worker(@_); }
+#sub known_workers { return shift->{connection}->workers(@_); } # add $self->name or return hash_ref of all
+#sub remove_known_worker { return shift->{connection}->remove_worker(@_); }
 
 sub interval {
     return $_[0]->{interval} if @_ == 1;
@@ -191,15 +191,26 @@ sub resume_processing {
 sub prune_dead_workers {
     my $self = shift;
 
-    my $known_workers = $self->known_workers();
-    my @db_workers = $self->redis->smembers( $self->key('workers') );
+    my @db_workers = $self->redis->smembers( $self->key('workers') )
+        or return;
 
     # we should probably check that the zombie worker wasnt working on something at this point... if it was then requeue it
 
-    foreach my $dbwork ( @db_workers ) {
-        if ( !$known_workers->{$dbwork} ) {
-            $self->prune_worker($dbwork);
+    my $this_hostname = Sys::Hostname::hostname();
+    foreach my $dbworker ( @db_workers ) {
+        my ($hostname, $pid, $queues) = split /:/, $dbworker;
+        if ( $hostname ne $this_hostname ) {
+            # worker is running on a different server
+            next WORKER;
         }
+
+        if ( kill 0, $pid ) {
+            # worker is still running
+            next WORKER;
+        }
+
+        # worker should be running on this server but isn't so clean up after it
+        $self->prune_worker($dbworker);
     }
 
 }
@@ -219,8 +230,6 @@ sub prune_worker {
     $redis->del($self->key('worker', $name, 'started'));
     $redis->del($self->key('stat','processed',$name));
     $redis->del($self->key('stat','failed',$name));
-
-    $self->remove_known_worker($name);
 }
 
 sub paused {
@@ -344,7 +353,6 @@ sub register_worker {
     my $redis = $self->redis();
     my $name = $self->name();
     $self->{registered} = 1;
-    $self->known_workers($name);
 
     $redis->sadd($self->key('workers') => $name);
     $redis->set($self->key('worker', $name, 'started') => $self->now() ); 
