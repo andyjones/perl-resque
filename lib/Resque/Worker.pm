@@ -75,6 +75,7 @@ sub work {
 
     my $interval = $self->interval();
 
+    POLL:
     while ( !$self->{shutdown} ) {
         my $idle = 0;
         if ( $self->paused() ) {
@@ -90,19 +91,14 @@ sub work {
             $self->procline( 'Waiting for %s', join(',',$self->queues()) );
         }
 
-        my $status = q{};
+        # run code hook for tests if provided
+        if ( $block_ref && $block_ref->( $idle ) ) {
+            last POLL;
+        }
 
         if ( $idle && $interval ) {
             $self->log_debug("Sleeping for %.2f seconds", $interval);
             Time::HiRes::sleep( $interval );
-            $status = $block_ref->("idle") if $block_ref;
-        }
-        elsif ($block_ref) {
-            $status = $block_ref->("job_done");
-        }
-
-        if ($status eq "last") {
-            last;
         }
     }
 
