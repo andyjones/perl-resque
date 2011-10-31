@@ -113,7 +113,15 @@ sub connect_to_redis {
 }
 
 sub ping {
-    return $_[0]->redis()->ping();
+    my $ping = eval {
+        $_[0]->redis()->ping();
+    };
+    if ( $@ ) {
+        warn "Redis unreachable: $@";
+        return 0;
+    }
+
+    return $ping;
 }
 
 1;
