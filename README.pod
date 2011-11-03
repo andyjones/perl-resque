@@ -7,6 +7,9 @@ A Perl port of Resque ( L<https://github.com/defunkt/resque> )
 
 Redis ( L<http://redis.io> )
 
+=head3 Installation
+
+cpanm https://github.com/andyjones/perl-resque/tarball/master
 
 =head3 Usage
 
