@@ -1,0 +1,15 @@
+package TestClass2;
+
+use strict;
+
+sub perform {
+    my $class = shift;
+    my %args = @_;
+    my $file = "t/40-auto-reload/test2.txt";
+    unlink $file if -f $file;
+    open FH, '>', $file or die "unable to write $file";
+    print FH "Orange";
+    close FH;
+}
+
+1;
