@@ -6,9 +6,11 @@ use Test::More tests => 1;
 
 use Resque;
 use Resque::Queue;
-use lib "t/30-bad-job";
+use lib t => "t/30-bad-job";
+use Resque::Cleanup;
 
 my $queue = 'resque-test-' . $$;
+my $cleaner = Resque::Cleanup->new($queue);
 
 my $resque = Resque->new();
 SKIP: {

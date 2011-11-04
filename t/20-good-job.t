@@ -6,37 +6,45 @@ use Test::More tests => 1;
 
 use Resque;
 use Resque::Queue;
+use lib "t";
+use Resque::Cleanup;
 
-my $queue = 'resque-test-' . $$;
+!caller && &main;
 
-my $resque = Resque->new();
-SKIP: {
-    skip "Tests require Redis", 1 unless $resque->ping();
+sub main {
 
-    # queue 2 jobs
-    my $client = $resque->new_client();
-    $client->push($queue, 'TestClass', ['add', 'date']);
-    $client->push($queue, 'TestClass', ['add', 'date']);
+    my $queue = "resque-test-$$";
 
-    # start a worker to process the job
-    my $worker = $resque->new_worker();
-    $worker->queues($queue);
+    my $cleaner = Resque::Cleanup->new($queue);
 
-    my $jobs_processed = 0;
-    $worker->work(sub {
-        my $idle = shift;
-        if ( $idle ) {
-            return 1;
-        }
+    my $resque = Resque->new;
 
-        $jobs_processed++;
+    SKIP: {
+        skip "Tests require Redis", 1 unless $resque->ping;
 
-        return 0;
-    });
+        # queue 2 jobs
+        my $client = $resque->new_client;
+        $client->push($queue, 'TestClass', ['add', 'date']);
+        $client->push($queue, 'TestClass', ['add', 'date']);
 
-    is($jobs_processed, 2, "we processed two jobs");
+        # start a worker to process the job
+        my $worker = $resque->new_worker;
+        $worker->queues($queue);
 
-    # cleanup
-    my $q = $resque->new_queue();
-    $q->remove_queue($queue);
-};
+        my $jobs_processed = 0;
+        $worker->work(sub {
+            my $idle = shift;
+            if ( $idle ) {
+                return 1;
+            }
+
+            $jobs_processed++;
+
+            return 0;
+        });
+
+
+        is($jobs_processed, 2, "we processed two jobs");
+    };
+}
+

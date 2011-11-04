@@ -6,18 +6,23 @@ use Test::More tests => 2;
 
 use Resque;
 use Resque::Queue;
-use lib "t/40-auto-reload";
+use lib t => "t/40-auto-reload";
+use Resque::Cleanup;
 
 !caller && &main;
 
 sub main {
+    my $queue = "TestQ-$$";
+
+    my $cleaner = Resque::Cleanup->new($queue);
+
     my $resque = Resque->new;
 
     plan skip_all => "Tests require Redis server" if ! $resque->ping;
 
     my $worker = $resque->new_worker;
 
-    $worker->queues("TestQ-$$");
+    $worker->queues($queue);
 
     my $process = 0;
 

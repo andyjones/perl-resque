@@ -29,7 +29,11 @@ sub payload {
 }
 
 sub payload_class {
-    return $_[0]->payload()->{class};
+    my $class_name = $_[0]->payload->{class};
+    if ($class_name =~/[\;\n\r]/gs) {
+        die "Unknown class name.";
+    }
+    return $class_name;
 }
 
 sub payload_args {
@@ -41,8 +45,8 @@ sub perform {
     my $class = $self->payload_class();
 
     local $@;
-    my $loaded_class = eval "use $class; 1";
-    if ( $loaded_class ) {
+    my $loaded_class = eval "use $class";
+    if ( ! "$@" ) {
         return $class->perform( $self->payload_args() );
     }
 
