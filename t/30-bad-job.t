@@ -2,17 +2,37 @@
 
 use strict;
 
-use Test::More;
+use Test::More tests => 1;
 
 use Resque;
 use Resque::Queue;
+use lib "t/30-bad-job";
 
 my $queue = 'resque-test-' . $$;
 
 my $resque = Resque->new();
-plan skip_all => "Tests require Redis server" unless $resque->ping();
+SKIP: {
+    skip "Tests require Redis server", 1 if ! $resque->ping();
 
-plan skip_all => "Test not written yet";
+    my $client = $resque->new_client;
+    $client->push($queue, TestClass2 => [test => 1]);
+    $client->push($queue, TestClass2 => [test => 2]);
+    $client->push($queue, TestClass  => [test => 3]);
+
+    my $worker = $resque->new_worker;
+
+    $worker->queues($queue);
+
+    my $total_process = 0;
+
+    $worker->work(sub{
+        my $idle = shift;
+        return 1 if $idle;
+        return ++$total_process == 3
+    });
+
+    is($total_process, 3);
+}
 
 __END__
 # queue a job that will fail

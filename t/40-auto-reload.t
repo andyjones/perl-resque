@@ -6,6 +6,7 @@ use Test::More tests => 2;
 
 use Resque;
 use Resque::Queue;
+use lib "t/40-auto-reload";
 
 !caller && &main;
 
@@ -44,16 +45,35 @@ sub main {
 }
 
 sub push_testq {
-    my $t = shift;
-    require($INC{"TestClass2.pm"} = "t/40-auto-reload/ClassFile$t.pm");
+    reload_test_class(shift);
     my $resque = Resque->new;
     my $client = $resque->new_client;
-    $client->push("TestQ-$$", TestClass2 => [$t]);
+    $client->push("TestQ-$$", TestClass2 => [14]);
+}
+
+sub reload_test_class {
+    my $test = shift;
+    if (open my $READ, "<:encoding(UTF-8)", "t/40-auto-reload/ClassFile$test.txt") {
+        local $/;
+        my $code = <$READ>;
+        close $READ;
+        if (open my $WRITE, ">:encoding(UTF-8)", "t/40-auto-reload/TestClass2.pm") {
+            print $WRITE $code;
+            close $WRITE;
+            unlink "t/40-auto-reload/test$test.txt";
+        }
+        else {
+            die "unable to replace test class.";
+        }
+    }
+    else {
+        die "unable to load class file.";
+    }
 }
 
 sub test_result {
     my $test = shift;
-    open FH, '<', "t/40-auto-reload/test$test.txt";
+    open FH, "<:encoding(UTF-8)", "t/40-auto-reload/test$test.txt";
     local $/;
     my $result = <FH>;
     close FH;
