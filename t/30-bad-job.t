@@ -2,8 +2,8 @@
 
 use strict;
 
-use Test::More tests => 1;
-
+use Test::More tests => 2;
+use JSON::XS;
 use Resque;
 use Resque::Queue;
 use lib t => "t/30-bad-job";
@@ -34,6 +34,17 @@ SKIP: {
     });
 
     is($total_process, 3);
+    is(&get_errors,    2);
+}
+
+sub get_errors {
+    my $resque      = Resque->new;
+    my $redis       = $resque->redis;
+    my $failure_key = $resque->key("failed");
+    my $n_failures  = $redis->llen($failure_key);
+    my @failures    = $redis->lrange($failure_key, 0, $n_failures);
+    my @errors      = grep {$_->{queue} eq $queue} @{decode_json(sprintf "[%s]", join ",", @failures)};
+    return wantarray ? @errors : $#errors + 1;
 }
 
 __END__

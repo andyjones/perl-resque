@@ -22,7 +22,7 @@ sub new {
 
 sub set_cleaning_signals {
     my $self = shift;
-    foreach my $signame(qw(__DIE__ INT HUP KILL TERM)) {
+    foreach my $signame(qw(__DIE__ INT HUP KILL TERM QUIT)) {
         $SIG{$signame} = sub { $self->cleanup($signame) }
     }
     return;
