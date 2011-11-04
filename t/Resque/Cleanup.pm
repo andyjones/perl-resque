@@ -48,7 +48,7 @@ sub DESTROY {
         }
     }
     else {
-        warn ">> Ignored cleanup request from child process.\n";
+        warn ">> Ignored cleanup request from child process.\n" if $self->{verbose} || $ENV{VERBOSE};
     }
 }
 1;
