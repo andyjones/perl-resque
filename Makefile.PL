@@ -14,6 +14,7 @@ requires       'Sys::Hostname'        => '0';
 requires       'Time::HiRes'          => '0';
 
 test_requires  'Test::More'  => '0.42';
+test_requires  'JSON::XS'    => 0;
 no_index       'directory'   => '/lib/t';
   
 WriteAll;
