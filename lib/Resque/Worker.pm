@@ -128,8 +128,9 @@ sub startup {
 sub register_signal_handlers {
     my $self = shift;
 
-    $SIG{INT}  = $SIG{TERM} = sub { $self->shutdown_now(); };
-    $SIG{KILL} = $SIG{TERM} = sub { $self->shutdonw_now(); };
+    $SIG{TERM} = sub { $self->shutdown_now(); };
+    $SIG{ABRT} = $SIG{TERM};
+    $SIG{INT}  = $SIG{TERM}; 
     $SIG{QUIT} = sub { $self->shutdown(); };
     $SIG{USR1} = sub { $self->kill_child(); };
     $SIG{USR2} = sub { $self->pause_processing(); };
