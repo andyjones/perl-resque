@@ -128,7 +128,8 @@ sub startup {
 sub register_signal_handlers {
     my $self = shift;
 
-    $SIG{INT} = $SIG{TERM} = sub { $self->shutdown_now(); };
+    $SIG{INT}  = $SIG{TERM} = sub { $self->shutdown_now(); };
+    $SIG{KILL} = $SIG{TERM} = sub { $self->shutdonw_now(); };
     $SIG{QUIT} = sub { $self->shutdown(); };
     $SIG{USR1} = sub { $self->kill_child(); };
     $SIG{USR2} = sub { $self->pause_processing(); };
@@ -144,6 +145,7 @@ sub unregister_signal_handlers {
 
 sub shutdown {
     my $self = shift;
+
     $self->log_info('Exiting...');
     $self->{shutdown} = 1;
 }
