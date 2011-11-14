@@ -17,4 +17,4 @@ use Resque::TestQuit;
 
 my $test = Resque::TestQuit->new_test;
 $test->try_force_quit(1);
-ok(1);
+$test->try_force_quit(2);
