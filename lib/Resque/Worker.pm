@@ -212,7 +212,7 @@ sub prune_dead_workers {
         }
 
         # worker should be running on this server but isn't so clean up after it
-        $self->prune_worker($dbworker => 1);
+        $self->prune_worker($dbworker);
     }
 
 }
@@ -220,9 +220,8 @@ sub prune_dead_workers {
 sub prune_worker {
     my $self      = shift;
     my $name      = shift;
-    my $is_killed = shift;
 
-    $self->handle_unfinished_job($name) if $is_killed;
+    $self->handle_unfinished_job($name);
 
     my $redis = $self->redis();
 
@@ -250,7 +249,7 @@ sub reserve {
 
     my $redis = $self->redis();
     foreach my $queue ( @queues ) {
-        if ( my $job = $self->reserve_job(queue => $queue) ) {
+        if ( my $job = $self->reserve_job($queue) ) {
             $self->log_debug("Found job on %s", $queue);
             return $job;
         }
@@ -259,26 +258,15 @@ sub reserve {
 }
 
 sub reserve_job {
-    my $self = shift;
-    my %args = @_   ;
-    my $json_payload;
+    my $self  = shift;
+    my $queue = shift;
 
-    if ($args{worker}) {
-        $json_payload = $self->redis->get($self->key(worker => $args{worker})) or return;
-        $args{queue} = (split/:/, $args{worker})[-1]; 
-    }
-    elsif ($args{queue}) {
-        $json_payload = $self->redis->lpop($self->key(queue => $args{queue})) or return;
-    }
-    else {
-        die "Uknown argument to call reserve_job() function.";
-    }
-
+    my $json_payload = $self->redis->lpop($self->key(queue => $queue)) or return;
     my $payload_ref = JSON::decode_json($json_payload);
 
     return Resque::Job->new({
           worker  => $self
-        , queue   => $args{queue}
+        , queue   => $queue
         , payload => $payload_ref
     });
 }
@@ -286,7 +274,7 @@ sub reserve_job {
 sub handle_unfinished_job {
     my $self = shift;
     my $name = shift;
-    my $job = $self->reserve_job(worker => $name);
+    my $job = $self->get_job_from_worker($name);
     if ($job) {
         $self->log_debug("Found unfinished job %s", $name);
         my $payload = $job->payload;
@@ -296,6 +284,21 @@ sub handle_unfinished_job {
             , worker => $self
         });
     }
+}
+
+sub get_job_from_worker {
+    my $self = shift;
+    my $name = shift;
+    my $queue = (split/:/, $name)[-1]; 
+
+    my $json_payload = $self->redis->get($self->key(worker => $name)) or return;
+    my $payload_ref = JSON::decode_json($json_payload);
+
+    return Resque::Job->new({
+          worker  => $self
+        , queue   => $queue
+        , payload => $payload_ref
+    });
 }
 
 sub queues {
@@ -389,11 +392,9 @@ sub register_worker {
 }
 
 sub unregister_worker {
-    my $self      = shift;
-    my $is_killed = shift;
-
-    my $name  = $self->name();
-    $self->prune_worker($name => $is_killed);
+    my $self = shift;
+    my $name = $self->name();
+    $self->prune_worker($name);
     $self->{registered} = 0;
 }
 
@@ -422,7 +423,7 @@ sub DESTROY {
     my $self = shift;
     if ( $self->is_parent() && $self->{registered} ) {
         $self->log_info("running destroy");
-        $self->unregister_worker(1);
+        $self->unregister_worker();
     }
 }
 
