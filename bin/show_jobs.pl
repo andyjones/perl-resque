@@ -24,7 +24,6 @@ sub main {
     my $queue_name = $args{qname};
     my $from       = $args{from};
     my $resque     = Resque->new;
-    my $client     = $resque->new_client;
     my $redis      = $resque->redis;
     my $key        = "resque:$queue_name";
     my $till       = $args{till} || $redis->llen($key);
