@@ -109,7 +109,6 @@ sub work {
 sub startup {
     my $self = shift;
 
-    $self->handle_unfinished_jobs;
     $self->register_signal_handlers();
     $self->prune_dead_workers();
     $self->register_worker();
@@ -213,14 +212,17 @@ sub prune_dead_workers {
         }
 
         # worker should be running on this server but isn't so clean up after it
-        $self->prune_worker($dbworker);
+        $self->prune_worker($dbworker => 1);
     }
 
 }
 
 sub prune_worker {
-    my $self = shift;
-    my $name = shift;
+    my $self      = shift;
+    my $name      = shift;
+    my $is_killed = shift;
+
+    $self->handle_unfinished_job($name) if $is_killed;
 
     my $redis = $self->redis();
 
@@ -233,6 +235,7 @@ sub prune_worker {
     $redis->del($self->key('worker', $name, 'started'));
     $redis->del($self->key('stat','processed',$name));
     $redis->del($self->key('stat','failed',$name));
+
 }
 
 sub paused {
@@ -247,7 +250,7 @@ sub reserve {
 
     my $redis = $self->redis();
     foreach my $queue ( @queues ) {
-        if ( my $job = $self->reserve_job( $queue ) ) {
+        if ( my $job = $self->reserve_job(queue => $queue) ) {
             $self->log_debug("Found job on %s", $queue);
             return $job;
         }
@@ -257,57 +260,42 @@ sub reserve {
 
 sub reserve_job {
     my $self = shift;
-    my $queue = shift;
+    my %args = @_   ;
+    my $json_payload;
 
-    my $json_payload = $self->redis->lpop( $self->key('queue', $queue) )
-        or return;
-
-    my $payload_ref = JSON::decode_json( $json_payload );
-
-    return Resque::Job->new({
-        worker  => $self,
-        queue   => $queue,
-        payload => $payload_ref,
-    });
-}
-
-sub handle_unfinished_jobs {
-    my $self   = shift;
-    my @queues = $self->watched_queues or return;
-
-    my $redis = $self->redis;
-    foreach my $queue(@queues) {
-        ## eg.: resque:worker:dvm-10:32542:TestQ-32540 
-        my @remains = grep { $#{[split/:/]} == 4 } $redis->keys(sprintf "%s:*", $self->key("worker"));
-        foreach my $key(@remains) {
-            if (my $job = $self->reserve_unfinished_job($queue => $key)) {
-                $self->log_debug("Found unfinished job on %s", $queue);
-                my $payload = $job->payload;
-                $job->fail({ 
-                      error  => "Unfinished job." 
-                    , stack  => Devel::StackTrace->new(message => "Worker killed unexpectedly")  
-                    , worker => $self
-                });
-            }
-        }
+    if ($args{worker}) {
+        $json_payload = $self->redis->get($self->key(worker => $args{worker})) or return;
+        $args{queue} = (split/:/, $args{worker})[-1]; 
     }
-}
-
-sub reserve_unfinished_job {
-    my $self  = shift;
-    my $queue = shift;
-    my $key   = shift;
-    my $redis = $self->redis;
-
-    my $json_payload = $redis->get($key) or next;
+    elsif ($args{queue}) {
+        $json_payload = $self->redis->lpop($self->key(queue => $args{queue})) or return;
+    }
+    else {
+        die "Uknown argument to call reserve_job() function.";
+    }
 
     my $payload_ref = JSON::decode_json($json_payload);
 
     return Resque::Job->new({
           worker  => $self
-        , queue   => $queue
+        , queue   => $args{queue}
         , payload => $payload_ref
     });
+}
+
+sub handle_unfinished_job {
+    my $self = shift;
+    my $name = shift;
+    my $job = $self->reserve_job(worker => $name);
+    if ($job) {
+        $self->log_debug("Found unfinished job %s", $name);
+        my $payload = $job->payload;
+        $job->fail({ 
+              error  => "Unfinished job." 
+            , stack  => Devel::StackTrace->new(message => "Worker killed unexpectedly")  
+            , worker => $self
+        });
+    }
 }
 
 sub queues {
@@ -401,10 +389,11 @@ sub register_worker {
 }
 
 sub unregister_worker {
-    my $self = shift;
+    my $self      = shift;
+    my $is_killed = shift;
 
     my $name  = $self->name();
-    $self->prune_worker($name);
+    $self->prune_worker($name => $is_killed);
     $self->{registered} = 0;
 }
 
@@ -433,7 +422,7 @@ sub DESTROY {
     my $self = shift;
     if ( $self->is_parent() && $self->{registered} ) {
         $self->log_info("running destroy");
-        $self->unregister_worker();
+        $self->unregister_worker(1);
     }
 }
 
