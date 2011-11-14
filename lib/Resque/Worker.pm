@@ -78,6 +78,7 @@ sub work {
     POLL:
     while ( !$self->{shutdown} ) {
         my $idle = 0;
+
         if ( $self->paused() ) {
             $idle = 1;
             $self->procline('Paused');
@@ -108,6 +109,7 @@ sub work {
 sub startup {
     my $self = shift;
 
+    $self->handle_unfinished_jobs;
     $self->register_signal_handlers();
     $self->prune_dead_workers();
     $self->register_worker();
@@ -266,6 +268,45 @@ sub reserve_job {
         worker  => $self,
         queue   => $queue,
         payload => $payload_ref,
+    });
+}
+
+sub handle_unfinished_jobs {
+    my $self   = shift;
+    my @queues = $self->watched_queues or return;
+
+    my $redis = $self->redis;
+    foreach my $queue(@queues) {
+        ## eg.: resque:worker:dvm-10:32542:TestQ-32540 
+        my @remains = grep { $#{[split/:/]} == 4 } $redis->keys(sprintf "%s:*", $self->key("worker"));
+        foreach my $key(@remains) {
+            if (my $job = $self->reserve_unfinished_job($queue => $key)) {
+                $self->log_debug("Found unfinished job on %s", $queue);
+                my $payload = $job->payload;
+                $job->fail({ 
+                      error  => "Unfinished job." 
+                    , stack  => Devel::StackTrace->new(message => "Worker killed unexpectedly")  
+                    , worker => $self
+                });
+            }
+        }
+    }
+}
+
+sub reserve_unfinished_job {
+    my $self  = shift;
+    my $queue = shift;
+    my $key   = shift;
+    my $redis = $self->redis;
+
+    my $json_payload = $redis->get($key) or next;
+
+    my $payload_ref = JSON::decode_json($json_payload);
+
+    return Resque::Job->new({
+          worker  => $self
+        , queue   => $queue
+        , payload => $payload_ref
     });
 }
 
