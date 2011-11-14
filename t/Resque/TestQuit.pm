@@ -43,14 +43,20 @@ sub try_int {
 
 sub try_force_quit {
     my $test = shift;
+    my $part = shift;
     ## Force Quit 
-    $test->new_job(WorkerIsHolding => "Test KILL");
-    $test->stop_worker(sub { kill KILL => @_ });
 
-    my $worker = $test->new_worker;
-    $worker->work(sub {1});
-    my $error = $test->get_errors;
-    is($error, 1, "Test force quit");
+    if ($part == 1) {
+        $test->new_job(WorkerIsHolding => "Test KILL");
+        $test->stop_worker(sub { kill KILL => @_ });
+    }
+    
+    if ($part == 2) {
+        my $worker = $test->new_worker;
+        $worker->work(sub {1});
+        my $error = $test->get_errors;
+        is($error, 1, "Test force quit");
+    }
 }
 
 sub stop_worker {
