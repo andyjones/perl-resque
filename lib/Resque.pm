@@ -12,6 +12,7 @@ use Redis;
 our $DEFAULT_PORT = 6379;
 our $DEFAULT_SERVER = 'localhost:'.$DEFAULT_PORT;
 our $DEFAULT_NAMESPACE = 'resque';
+our $REDIS_RECONNECT = 60;
 
 sub _get_obj {
     if ( ref($_[0]) ) {
@@ -109,7 +110,7 @@ sub redis {
 
 sub connect_to_redis {
     my $self = shift;
-    return Redis->new( server => $self->server(), debug => 0 );
+    return Redis->new( server => $self->server(), debug => 0, reconnect => $REDIS_RECONNECT );
 }
 
 sub ping {
